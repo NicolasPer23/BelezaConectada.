@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1064314810858",
+    "project_id": "belezaconectada-64354",
+    "storage_bucket": "belezaconectada-64354.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1064314810858:android:f77162e3ca93bac8294293",
+        "android_client_info": {
+          "package_name": "com.example.belezaconectada"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgugT9T7lfEgZiRFwldyCwXNa3BV1l0HE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
