@@ -42,70 +42,75 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import java.util.Locale
 
-// --- MODELO DE DADOS ---
+//Classe de dados que representa as propriedades de um salão/barbearia/estética
 data class Estabelecimento(
-    val id: String,
-    val nome: String,
-    val subcategoria: String,
-    val categoria: String,
-    val descricao: String,
-    val tag: String,
-    val avaliacao: String,
-    val avaliacoesCount: String,
-    val distancia: String,
-    val status: String,
-    val preco: String,
-    var favorito: Boolean
+    val id: String, //Identificador único no banco
+    val nome: String, // Nome do estabelecimento (ex: "Studio Aurora")
+    val subcategoria: String, // Subcategoria (ex: "Salão de Beleza")
+    val categoria: String, // Categoria Principal (ex: "Cabelo")
+    val descricao: String, // Descrição textual do local
+    val tag: String, // Etiqueta de Busca
+    val avaliacao: String, //Nota de Avaliação
+    val avaliacoesCount: String,// Quantidade de avaliações recebidas
+    val distancia: String, // Distancia do utilizador (ex: "1,2km")
+    val status: String, // Ex: "Aberto Agora"
+    val preco: String, // Faixa de preço (ex "$$")
+    var favorito: Boolean // define se o utilizador favoritou este salão (true ou false)
 )
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity() { // Activity principal que roda o app no celular
 
-    private lateinit var auth: FirebaseAuth
-    private var localizacaoAtual by mutableStateOf("Verificando localização...")
-    private var gpsPermitido by mutableStateOf(false)
+    private lateinit var auth: FirebaseAuth // Instância do firabaseAuth para verificar se o utlizador está logado
+    private var localizacaoAtual by mutableStateOf("Verificando localização...") //Estado reativo: quando muda, o Compose atualiza o texto na tela
+    private var gpsPermitido by mutableStateOf(false) // Guarda se o utilizador de permissão o acesso ao GPS
 
+    //Registra um ouvinte para capturar a resposta da caixa de diálogo de permissão do Android:
     private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
+        ActivityResultContracts.RequestMultiplePermissions() //Pede multiplas permissões ao mesmo tempo
     ) { permissions ->
+        // Verifica se a permissão de GPS preciso ou aproximado foi concedida:
         val fineLocation = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
         val coarseLocation = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
 
         if (fineLocation || coarseLocation) {
             gpsPermitido = true
-            obterLocalizacaoGPS()
+            obterLocalizacaoGPS() // se aceitou, busca o GPS imediatamente
         } else {
             gpsPermitido = false
-            localizacaoAtual = "Permissão negada. O app requer localização."
+            localizacaoAtual = "Permissão negada. O app requer localização." // se negou exibe a mensagem
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        auth = FirebaseAuth.getInstance()
-        enableEdgeToEdge()
-        verificarPermissaoEObterGPS()
+        auth = FirebaseAuth.getInstance() //Inicializa a conexão com o Firebase Auth
+        enableEdgeToEdge() // Faz a tela ocupar 100% da área do visor (atrás da barra de status e de navegação
+        verificarPermissaoEObterGPS() // Dispara a checagem de permissões ao iniciar o app
 
-        setContent {
-            BelezaConectadaTheme {
-                val navController = rememberNavController()
-                var tipoPerfil by remember { mutableStateOf("cliente") }
-                var emailParaVerificar by remember { mutableStateOf("") }
-                var telaAtualBarra by remember { mutableStateOf("inicio") }
+        setContent { //Define que o conteúdo da tela será construído via jetpack Compose
+            BelezaConectadaTheme { // Aplica o tema visual personalizado do app (cores, tipografia)
+                val navController = rememberNavController() // Cria o controlador que executa as mudanças de tela
+                var tipoPerfil by remember { mutableStateOf("cliente") } //Armazena se o usuário é "Cliente ou Estabelecimento"
+                var emailParaVerificar by remember { mutableStateOf("") } //Guarda temporariamente o email cadastrado
+                var telaAtualBarra by remember { mutableStateOf("inicio") } // Guarda qual botão da barra inferior está selecionado
 
-                // O utilizador pode navegar como convidado caso não esteja logado
-                val startDest = "inicio"
 
+                val startDest = "inicio" // Define a tela que abrirá primeiro ao iniciar o app
+
+                //Se a permissão foi negada, bloqueia o app e mostra a tela de permissão:
                 if (!gpsPermitido && localizacaoAtual.contains("Permissão negada")) {
                     TelaBloqueioGPS(onTentarNovamente = { verificarPermissaoEObterGPS() })
                 } else {
+                    //Senão, mostra a estrutura normal com a barra inferior e Navegação
                     Scaffold(
-                        bottomBar = {
-                            if (tipoPerfil == "cliente") {
+                        bottomBar = { //Barra de botões na parte inferior da tela
+                            if (tipoPerfil == "cliente") { // A Barra inferior só aparece para perfil Cliente
                                 Surface(color = Color.White, shadowElevation = 8.dp) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.SpaceAround
+                                        horizontalArrangement = Arrangement.SpaceAround // Distribui os botões com espaços
                                     ) {
+                                        // Cada BotaoBarra navega para a rota correspondente quando clicado
                                         BotaoBarra("Início", Icons.Default.Home, telaAtualBarra == "inicio") {
                                             telaAtualBarra = "inicio"
                                             navController.navigate("inicio") { popUpTo("inicio") { inclusive = true } }
@@ -116,7 +121,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                         BotaoBarra("Favoritos", Icons.Default.Favorite, telaAtualBarra == "favoritos") {
                                             if (auth.currentUser == null) {
-                                                navController.navigate("selecao_perfil")
+                                                navController.navigate("selecao_perfil") // Se não está logado, obriga a fazer o login
                                             } else {
                                                 telaAtualBarra = "favoritos"
                                                 navController.navigate("favoritos") { popUpTo("inicio") }
@@ -142,14 +147,14 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         },
-                        containerColor = Color(0xFFFFF9FA)
-                    ) { innerPadding ->
+                        containerColor = Color(0xFFFFF9FA) // Cor de fundo para todas as telas
+                    ) { innerPadding -> // O NavHost troca o conteúdo da tela dinamicamente sem recarregar a Activity
                         NavHost(
                             navController = navController,
                             startDestination = startDest,
-                            modifier = Modifier.padding(innerPadding)
+                            modifier = Modifier.padding(innerPadding) // Evita que o conteúdo fique atrás da barra inferior
                         ) {
-                            composable("inicio") {
+                            composable("inicio") { // Rota "Inicio"
                                 TelaInicio(
                                     localizacaoAtual = localizacaoAtual,
                                     onExp = { telaAtualBarra = "explorar"; navController.navigate("explorar") },
@@ -224,7 +229,7 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("perfil") {
                                 TelaPerfil {
-                                    auth.signOut()
+                                    auth.signOut() // Encerra a sessão do utilizador no firebase
                                     telaAtualBarra = "inicio"
                                     navController.navigate("inicio") { popUpTo(0) }
                                 }
@@ -255,10 +260,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun verificarPermissaoEObterGPS() {
+        //Checa se o app já tem a permissão para usar o GPS
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             gpsPermitido = true
-            obterLocalizacaoGPS()
+            obterLocalizacaoGPS() //Se já tem permissão, calcula a localização
         } else {
+            //se não tem, dispara o popup oficial do Android pedindo autorização
             permissionLauncher.launch(
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
             )
@@ -266,16 +273,19 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun obterLocalizacaoGPS() {
+        // Cria o cliente de localização do Google Play Services
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         try {
+            //pede ao celular a ultima posição conhecida do GPS
             fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                 if (location != null) {
+                    // O geocoder pega a latitude e longitude e converte em endereço humano
                     val geocoder = Geocoder(this, Locale.getDefault())
                     val addresses: List<Address>? = geocoder.getFromLocation(location.latitude, location.longitude, 1)
                     if (!addresses.isNullOrEmpty()) {
                         val bairro = addresses[0].subLocality ?: addresses[0].thoroughfare ?: "Local atual"
                         val cidade = addresses[0].adminArea ?: ""
-                        localizacaoAtual = "$bairro,$cidade"
+                        localizacaoAtual = "$bairro,$cidade" //Atualiza a variável observada pelo Compose
                     } else {
                         localizacaoAtual = "São Paulo, SP"
                     }
@@ -292,11 +302,12 @@ class MainActivity : ComponentActivity() {
 // --- BOTÃO DA BARRA DE NAVEGAÇÃO ---
 @Composable
 fun BotaoBarra(titulo: String, icone: androidx.compose.ui.graphics.vector.ImageVector, selecionado: Boolean, onClick: () -> Unit) {
+    //Se a aba estiver selecionada, pinta de roxo rosa, senão pinta de cinza
     val corTema = if (selecionado) Color(0xFF8E4772) else Color.Gray
     TextButton(onClick = onClick) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(imageVector = icone, contentDescription = titulo, tint = corTema, modifier = Modifier.size(22.dp))
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(2.dp)) // espaço vertical entre ícone e texto
             Text(text = titulo, fontSize = 10.sp, color = corTema, fontWeight = if (selecionado) FontWeight.Bold else FontWeight.Normal)
         }
     }
@@ -360,10 +371,11 @@ fun TelaLoginCadastro(
     var senha by remember { mutableStateOf("") }
     var nome by remember { mutableStateOf("") }
     var cnpj by remember { mutableStateOf("") }
-    var isCadastro by remember { mutableStateOf(false) }
+    var isCadastro by remember { mutableStateOf(false) } //Alterna entra aba Entrar e Cadastrar
     var mensagemErro by remember { mutableStateOf("") }
-    var carregando by remember { mutableStateOf(false) }
+    var carregando by remember { mutableStateOf(false) } //Exibe o indicador circular quando true
 
+    // Launcher que recebe o resultado do clique no botão "Continuar com o Google"
     val googleLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -372,6 +384,7 @@ fun TelaLoginCadastro(
             val account = task.getResult(ApiException::class.java)
             val credential = GoogleAuthProvider.getCredential(account.idToken, null)
             carregando = true
+            // Autentica as credencias do google dentro do firebase Auth
             auth.signInWithCredential(credential)
                 .addOnCompleteListener { authTask ->
                     carregando = false
@@ -387,7 +400,9 @@ fun TelaLoginCadastro(
         }
     }
 
+    // Estrutura do formulário com botões e validações simultaneas
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFFFF9FA)).padding(24.dp), verticalArrangement = Arrangement.Center) {
+        //Campos de texto de nome, CNPJ, email e senha
         IconButton(onClick = onVoltar) {
             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = null, tint = Color(0xFF8E4772))
         }
@@ -417,6 +432,7 @@ fun TelaLoginCadastro(
 
         Button(
             onClick = {
+                // validações em tempo de execução
                 val emailValido = android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
                 val temOitoDigitos = senha.length >= 8
                 val temMaiuscula = senha.any { it.isUpperCase() }
@@ -437,11 +453,13 @@ fun TelaLoginCadastro(
                 mensagemErro = ""
 
                 if (isCadastro) {
+                    // Executa o cadastro no Firebase Auth
                     auth.createUserWithEmailAndPassword(email, senha)
                         .addOnCompleteListener { task ->
                             carregando = false
                             if (task.isSuccessful) {
                                 val user = auth.currentUser
+                                // Envia o e-mail oficial de confirmação com o Link Clicável
                                 user?.sendEmailVerification()?.addOnCompleteListener { verifyTask ->
                                     if (verifyTask.isSuccessful) {
                                         onAguardandoVerificacao(email)
@@ -454,11 +472,13 @@ fun TelaLoginCadastro(
                             }
                         }
                 } else {
+                    // Executa o login no Firebase Auth
                     auth.signInWithEmailAndPassword(email, senha)
                         .addOnCompleteListener { task ->
                             carregando = false
                             if (task.isSuccessful) {
                                 val user = auth.currentUser
+                                // Garante que o usário só entra se clicou no link enviado no email
                                 if (user != null && user.isEmailVerified) {
                                     onLoginSucesso()
                                 } else {
