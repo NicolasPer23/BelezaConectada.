@@ -14,6 +14,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -26,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -69,7 +72,7 @@ class MainActivity : ComponentActivity() { // Activity principal que roda o app 
         ActivityResultContracts.RequestMultiplePermissions() //Pede multiplas permissões ao mesmo tempo
     ) { permissions ->
         // Verifica se a permissão de GPS preciso ou aproximado foi concedida:
-        val fineLocation = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+        val fineLocation = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false //(?:) "Procure a permissão de GPS no mapa. Se ela existir, me de o valor dela. SE FOR NULA (null), use o valor padrão false
         val coarseLocation = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
 
         if (fineLocation || coarseLocation) {
@@ -93,7 +96,7 @@ class MainActivity : ComponentActivity() { // Activity principal que roda o app 
                 var tipoPerfil by remember { mutableStateOf("cliente") } //Armazena se o usuário é "Cliente ou Estabelecimento"
                 var emailParaVerificar by remember { mutableStateOf("") } //Guarda temporariamente o email cadastrado
                 var telaAtualBarra by remember { mutableStateOf("inicio") } // Guarda qual botão da barra inferior está selecionado
-
+                var categoriaSelecionada by remember { mutableStateOf("") }
 
                 val startDest = "inicio" // Define a tela que abrirá primeiro ao iniciar o app
 
@@ -120,28 +123,16 @@ class MainActivity : ComponentActivity() { // Activity principal que roda o app 
                                             navController.navigate("explorar") { popUpTo("inicio") }
                                         }
                                         BotaoBarra("Favoritos", Icons.Default.Favorite, telaAtualBarra == "favoritos") {
-                                            if (auth.currentUser == null) {
-                                                navController.navigate("selecao_perfil") // Se não está logado, obriga a fazer o login
-                                            } else {
-                                                telaAtualBarra = "favoritos"
-                                                navController.navigate("favoritos") { popUpTo("inicio") }
-                                            }
+                                            telaAtualBarra = "favoritos"
+                                            navController.navigate("favoritos") { popUpTo("inicio") }
                                         }
                                         BotaoBarra("Agenda", Icons.Default.DateRange, telaAtualBarra == "agendamentos") {
-                                            if (auth.currentUser == null) {
-                                                navController.navigate("selecao_perfil")
-                                            } else {
-                                                telaAtualBarra = "agendamentos"
-                                                navController.navigate("agendamentos") { popUpTo("inicio") }
-                                            }
+                                            telaAtualBarra = "agendamentos"
+                                            navController.navigate("agendamentos") { popUpTo("inicio") }
                                         }
                                         BotaoBarra("Perfil", Icons.Default.Person, telaAtualBarra == "perfil") {
-                                            if (auth.currentUser == null) {
-                                                navController.navigate("selecao_perfil")
-                                            } else {
-                                                telaAtualBarra = "perfil"
-                                                navController.navigate("perfil") { popUpTo("inicio") }
-                                            }
+                                            telaAtualBarra = "perfil"
+                                            navController.navigate("perfil") { popUpTo("inicio") }
                                         }
                                     }
                                 }
@@ -154,18 +145,41 @@ class MainActivity : ComponentActivity() { // Activity principal que roda o app 
                             startDestination = startDest,
                             modifier = Modifier.padding(innerPadding) // Evita que o conteúdo fique atrás da barra inferior
                         ) {
-                            composable("inicio") { // Rota "Inicio"
+                            composable("inicio") {
                                 TelaInicio(
                                     localizacaoAtual = localizacaoAtual,
-                                    onExp = { telaAtualBarra = "explorar"; navController.navigate("explorar") },
+                                    onExp = {
+                                        categoriaSelecionada = ""
+                                        telaAtualBarra = "explorar"
+                                        navController.navigate("explorar")
+                                    },
+                                    onCategoriaClick = { categoria ->
+                                        categoriaSelecionada = categoria
+                                        telaAtualBarra = "explorar"
+                                        navController.navigate("explorar")
+                                    },
                                     onDet = { navController.navigate("detalhes") },
                                     onLoginClick = { navController.navigate("selecao_perfil") },
                                     isLogado = auth.currentUser != null
                                 )
                             }
-                            composable("explorar") { TelaExplorar() }
-                            composable("favoritos") { TelaFavoritos() }
-                            composable("agendamentos") { TelaAgendamentos { telaAtualBarra = "explorar"; navController.navigate("explorar") } }
+                            composable("explorar") { TelaExplorar(
+                                categoriaSelecionada = categoriaSelecionada,
+                                onLimparFiltro = { categoriaSelecionada = ""}
+                            ) }
+                            composable("favoritos") {
+                                TelaFavoritos(
+                                    isLogado = auth.currentUser != null,
+                                    onLoginClick = { navController.navigate("selecao_perfil") }
+                                )
+                            }
+                            composable("agendamentos") {
+                                TelaAgendamentos(
+                                    isLogado = auth.currentUser != null,
+                                    onLoginClick = { navController.navigate("selecao_perfil") },
+                                    onExplorar = { telaAtualBarra = "explorar"; navController.navigate("explorar") }
+                                )
+                            }
                             composable("selecao_perfil") {
                                 TelaSelecaoPerfil(
                                     onIrParaLoginCliente = { navController.navigate("login_cliente") },
@@ -228,11 +242,15 @@ class MainActivity : ComponentActivity() { // Activity principal que roda o app 
                                 )
                             }
                             composable("perfil") {
-                                TelaPerfil {
-                                    auth.signOut() // Encerra a sessão do utilizador no firebase
-                                    telaAtualBarra = "inicio"
-                                    navController.navigate("inicio") { popUpTo(0) }
-                                }
+                                TelaPerfil(
+                                    isLogado = auth.currentUser != null,
+                                    onLoginClick = { navController.navigate("selecao_perfil") },
+                                    onSair = {
+                                        auth.signOut()
+                                        telaAtualBarra = "inicio"
+                                        navController.navigate("inicio") { popUpTo(0) }
+                                    }
+                                )
                             }
                             composable("detalhes") {
                                 TelaDetalhesEstabelecimento(
@@ -318,10 +336,20 @@ fun BotaoBarra(titulo: String, icone: androidx.compose.ui.graphics.vector.ImageV
 fun TelaInicio(
     localizacaoAtual: String,
     onExp: () -> Unit,
+    onCategoriaClick: (String) -> Unit,
     onDet: () -> Unit,
     onLoginClick: () -> Unit,
     isLogado: Boolean
 ) {
+    val categorias = listOf(
+        Pair("Cabelo", Icons.Default.ContentCut),
+        Pair("Unhas", Icons.Default.Brush),
+        Pair("Barba", Icons.Default.Face),
+        Pair("Estética", Icons.Default.AutoAwesome),
+        Pair("Sobrancelha", Icons.Default.Visibility),
+        Pair("Academia", Icons.Default.FitnessCenter)
+    )
+
     LazyColumn(modifier = Modifier.fillMaxSize().padding(20.dp)) {
         item {
             Row(
@@ -337,8 +365,39 @@ fun TelaInicio(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Bem-vindo ao Beleza Conectada!", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("Beleza Conectada!", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text("Categorias", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E4772))
             Spacer(modifier = Modifier.height(12.dp))
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(categorias.size) { index ->
+                    val (nome, icone) = categorias[index]
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .background(Color.White, shape = RoundedCornerShape(16.dp))
+                            .padding(16.dp)
+                    ) {
+                        IconButton(
+                            onClick = { onCategoriaClick(nome) },
+                            modifier = Modifier
+                                .size(56.dp)
+                                .background(Color(0xFFFFF0F5), shape = CircleShape)
+                        ) {
+                            Icon(imageVector = icone, contentDescription = nome, tint = Color(0xFF8E4772))
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(text = nome, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
             Button(
                 onClick = onDet,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E4772))
@@ -421,7 +480,7 @@ fun TelaLoginCadastro(
 
         OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("E-mail") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(value = senha, onValueChange = { senha = it }, label = { Text("Senha (Mín. 8 char, 1 maiúscula, 1 especial)") }, modifier = Modifier.fillMaxWidth(), visualTransformation = PasswordVisualTransformation(), singleLine = true)
+        OutlinedTextField(value = senha, onValueChange = { senha = it }, label = { Text("Senha") }, modifier = Modifier.fillMaxWidth(), visualTransformation = PasswordVisualTransformation(), singleLine = true)
 
         if (mensagemErro.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
@@ -560,55 +619,172 @@ fun TelaBloqueioGPS(onTentarNovamente: () -> Unit) {
 }
 
 @Composable
-fun TelaExplorar() {
+fun TelaExplorar(
+    categoriaSelecionada: String,
+    onLimparFiltro: () -> Unit
+) {
+    val listaEstabelecimentos = remember {
+        listOf(
+            Estabelecimento("1", "Studio Aura", "Salão de beleza", "Cabelo", "Cortes e coloração", "Populares", "4.9", "128", "1.2 km", "Aberto", "$$$", false),
+            Estabelecimento("2", "Esmalteria Bella", "Manicure e Pedicure", "Unhas", "Unhas em gel e fibra", "Promoção", "4.8", "95", "0.8 km", "Aberto", "$$", false),
+            Estabelecimento("3", "Barbearia Viking", "Barbearia Tradicional", "Barba", "Corte masculino e barba", "Destaque", "4.7", "210", "2.5 km", "Aberto", "$$", false),
+            Estabelecimento("4", "Clínica Glow", "Estética Facial", "Estética", "Limpeza de pele e botox", "Novo", "5.0", "42", "3.1 km", "Aberto", "$$$$", false)
+        )
+    }
+
+    val estabelecimentosFiltrados = remember(categoriaSelecionada) {
+        if (categoriaSelecionada.isEmpty()) {
+            listaEstabelecimentos
+        } else {
+            listaEstabelecimentos.filter { it.categoria.equals(categoriaSelecionada, ignoreCase = true) }
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().background(Color(0xFFFFF9FA)).padding(20.dp)
     ) {
         Text("Explorar Estabelecimentos", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2D2D2D))
         Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(
-            value = "",
-            onValueChange = {},
-            label = { Text("Buscar serviços ou salões...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("Nenhum resultado encontrado no momento.", color = Color.Gray, fontSize = 14.sp)
+
+        if (categoriaSelecionada.isNotEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .background(Color(0xFF8E4772), shape = RoundedCornerShape(20.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text("Categoria: $categoriaSelecionada", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = onLimparFiltro, modifier = Modifier.size(18.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Limpar Filtro", tint = Color.White)
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        if (estabelecimentosFiltrados.isEmpty()) {
+            Text("Nenhum estabelecimento encontrado nesta categoria.", color = Color.Gray, fontSize = 14.sp)
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(estabelecimentosFiltrados.size) { index ->
+                    val est = estabelecimentosFiltrados[index]
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(text = est.nome, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2D2D2D))
+                            Text(text = "${est.subcategoria} • ${est.distancia}", fontSize = 12.sp, color = Color.Gray)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFC107), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "${est.avaliacao} (${est.avaliacoesCount})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-fun TelaFavoritos() {
+fun TelaFavoritos(
+    isLogado: Boolean,
+    onLoginClick: () -> Unit
+) {
     Column(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFFFF9FA)).padding(20.dp)
-    ) {
-        Text("Meus Favoritos", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2D2D2D))
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("Você ainda não salvou nenhum estabelecimento como favorito.", color = Color.Gray, fontSize = 14.sp)
-    }
-}
-
-@Composable
-fun TelaAgendamentos(onExplorar: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFFFF9FA)).padding(20.dp),
+        modifier = Modifier.fillMaxSize().background(Color(0xFFFFF9FA)).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(imageVector = Icons.Default.DateRange, contentDescription = null, tint = Color(0xFF8E4772), modifier = Modifier.size(64.dp))
+        Box(
+            modifier = Modifier.size(80.dp).background(Color(0xFFEEEEEE), shape = CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(40.dp))
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(text = "Meus Favoritos", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2D2D2D))
+        Spacer(modifier = Modifier.height(8.dp))
+        if (!isLogado) {
+            Text(
+                text = "Você precisa estar conectado para visualizar e salvar seus estabelecimentos favoritos.",
+                color = Color.Gray,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onLoginClick,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E4772)),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Entrar ou Cadastrar", color = Color.White)
+            }
+        } else {
+            Text(
+                text = "Você ainda não salvou nenhum estabelecimento como favorito.",
+                color = Color.Gray,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+fun TelaAgendamentos(
+    isLogado: Boolean,
+    onLoginClick: () -> Unit,
+    onExplorar: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().background(Color(0xFFFFF9FA)).padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier.size(80.dp).background(Color(0xFFEEEEEE), shape = CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(imageVector = Icons.Default.DateRange, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(40.dp))
+        }
         Spacer(modifier = Modifier.height(16.dp))
         Text("Meus Agendamentos", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2D2D2D))
         Spacer(modifier = Modifier.height(8.dp))
-        Text("Você ainda não possui agendamentos realizados.", color = Color.Gray, fontSize = 14.sp)
-        Spacer(modifier = Modifier.height(20.dp))
-        Button(
-            onClick = onExplorar,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E4772)),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Text("Explorar Serviços", color = Color.White)
+        if (!isLogado) {
+            Text(
+                text = "Você precisa estar conectado para visualizar seus agendamentos.",
+                color = Color.Gray,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onLoginClick,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E4772)),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Entrar ou Cadastrar", color = Color.White)
+            }
+        } else {
+            Text(
+                text = "Você ainda não possui agendamentos realizados.",
+                color = Color.Gray,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
+                onClick = onExplorar,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E4772)),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Explorar Serviços", color = Color.White)
+            }
         }
     }
 }
@@ -725,19 +901,50 @@ fun TelaVerificacaoCnpj(onVoltar: () -> Unit) {
 }
 
 @Composable
-fun TelaPerfil(onSair: () -> Unit) {
+fun TelaPerfil(
+    isLogado: Boolean,
+    onLoginClick: () -> Unit,
+    onSair: () -> Unit
+) {
     Column(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFFFF9FA)).padding(24.dp)
+        modifier = Modifier.fillMaxSize().background(Color(0xFFFFF9FA)).padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Text("Meu Perfil", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2D2D2D))
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = onSair,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth().height(50.dp)
+        Box(
+            modifier = Modifier.size(80.dp).background(Color(0xFFEEEEEE), shape = CircleShape),
+            contentAlignment = Alignment.Center
         ) {
-            Text("Sair da Conta", color = Color.White)
+            Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(40.dp))
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Meu Perfil", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2D2D2D))
+        Spacer(modifier = Modifier.height(8.dp))
+        if (!isLogado) {
+            Text(
+                text = "Você precisa estar conectado para acessar seu perfil e configurações.",
+                color = Color.Gray,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onLoginClick,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E4772)),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Entrar ou Cadastrar", color = Color.White)
+            }
+        } else {
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onSair,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth().height(50.dp)
+            ) {
+                Text("Sair da Conta", color = Color.White)
+            }
         }
     }
 }
