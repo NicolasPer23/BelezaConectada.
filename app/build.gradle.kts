@@ -34,6 +34,7 @@ android {
     buildFeatures {
         compose = true
     }
+    buildToolsVersion = "36.0.0"
 }
 
 dependencies {
@@ -63,4 +64,9 @@ dependencies {
     implementation("com.google.firebase:firebase-auth") // Autentificação de utilizadores (Email/senha/google)
     implementation("com.google.firebase:firebase-firestore") //Banco de Dados NoSQL em tempo real do Firebase (Armazena perfis, agendamentos e estabelecimentos)
     implementation("com.google.android.gms:play-services-auth:21.3.0") //Integração Nativa para login com a conta Google
+    // Retrofit & Gson para consultas de API na internet (BrasilAPI CNPJ/CEP)
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+    // Coil para carregamento de imagens da internet no Compose
+    implementation("io.coil-kt:coil-compose:2.7.0")
 }
