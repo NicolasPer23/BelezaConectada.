@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.location.Address
 import android.location.Geocoder
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -16,8 +17,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -28,6 +31,9 @@ import com.example.belezaconectada.ui.theme.BelezaConectadaTheme
 import com.example.belezaconectada.ui.viewmodel.AuthViewModel
 import com.example.belezaconectada.ui.viewmodel.ExplorarViewModel
 import com.google.android.gms.location.LocationServices
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -60,6 +66,7 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val authViewModel: AuthViewModel = viewModel()
                 val explorarViewModel: ExplorarViewModel = viewModel()
+                val context = LocalContext.current
 
                 var tipoPerfil by remember { mutableStateOf("cliente") }
                 var emailParaVerificar by remember { mutableStateOf("") }
@@ -68,7 +75,13 @@ class MainActivity : ComponentActivity() {
                 val startDest = "inicio"
 
                 if (!gpsPermitido && localizacaoAtual.contains("Permissão negada")) {
-                    TelaBloqueioGPS(onTentarNovamente = { verificarPermissaoEObterGPS() })
+                    TelaBloqueioGPS(
+                        onSolicitarPermissao = { solicitarPermissoes() },
+                        onContinuarAssimMesmo = {
+                            gpsPermitido = true
+                            localizacaoAtual = "São Paulo, SP"
+                        }
+                    )
                 } else {
                     Scaffold(
                         bottomBar = {
@@ -87,12 +100,20 @@ class MainActivity : ComponentActivity() {
                                             navController.navigate("explorar") { popUpTo("inicio") }
                                         }
                                         BotaoBarra("Favoritos", Icons.Default.Favorite, telaAtualBarra == "favoritos") {
-                                            telaAtualBarra = "favoritos"
-                                            navController.navigate("favoritos") { popUpTo("inicio") }
+                                            if (!authViewModel.isUserLoggedIn()) {
+                                                Toast.makeText(context, "Faça login para salvar seus favoritos.", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                telaAtualBarra = "favoritos"
+                                                navController.navigate("favoritos") { popUpTo("inicio") }
+                                            }
                                         }
                                         BotaoBarra("Agenda", Icons.Default.DateRange, telaAtualBarra == "agendamentos") {
-                                            telaAtualBarra = "agendamentos"
-                                            navController.navigate("agendamentos") { popUpTo("inicio") }
+                                            if (!authViewModel.isUserLoggedIn()) {
+                                                Toast.makeText(context, "Faça login para acessar sua agenda.", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                telaAtualBarra = "agendamentos"
+                                                navController.navigate("agendamentos") { popUpTo("inicio") }
+                                            }
                                         }
                                         BotaoBarra("Perfil", Icons.Default.Person, telaAtualBarra == "perfil") {
                                             telaAtualBarra = "perfil"
@@ -112,6 +133,7 @@ class MainActivity : ComponentActivity() {
                             composable("inicio") {
                                 TelaInicio(
                                     localizacaoAtual = localizacaoAtual,
+                                    estabelecimentos = explorarViewModel.listaEstabelecimentos,
                                     onExp = {
                                         explorarViewModel.updateCategoriaSelecionada("")
                                         telaAtualBarra = "explorar"
@@ -122,7 +144,9 @@ class MainActivity : ComponentActivity() {
                                         telaAtualBarra = "explorar"
                                         navController.navigate("explorar")
                                     },
-                                    onDet = { navController.navigate("detalhes") },
+                                    onEstabelecimentoClick = { _ ->
+                                        navController.navigate("detalhes")
+                                    },
                                     onLoginClick = { navController.navigate("selecao_perfil") },
                                     isLogado = authViewModel.isUserLoggedIn()
                                 )
@@ -222,11 +246,12 @@ class MainActivity : ComponentActivity() {
                             composable("detalhes") {
                                 TelaDetalhesEstabelecimento(
                                     nome = "Studio Aura",
-                                    sub = "Salão de beleza",
-                                    av = "4,9",
+                                    sub = "Salão de beleza • Cortes e tratamentos",
+                                    av = "4,9 (128 avaliações)",
                                     onVoltar = { navController.popBackStack() }
                                 ) {
                                     if (!authViewModel.isUserLoggedIn()) {
+                                        Toast.makeText(context, "Faça login para agendar um horário.", Toast.LENGTH_SHORT).show()
                                         navController.navigate("selecao_perfil")
                                     } else {
                                         telaAtualBarra = "agendamentos"
@@ -253,10 +278,19 @@ class MainActivity : ComponentActivity() {
             gpsPermitido = true
             obterLocalizacaoGPS()
         } else {
-            permissionLauncher.launch(
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-            )
+            solicitarPermissoes()
         }
+    }
+
+    private fun solicitarPermissoes() {
+        permissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.READ_CALENDAR,
+                Manifest.permission.WRITE_CALENDAR
+            )
+        )
     }
 
     private fun obterLocalizacaoGPS() {
@@ -264,14 +298,25 @@ class MainActivity : ComponentActivity() {
         try {
             fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                 if (location != null) {
-                    val geocoder = Geocoder(this, Locale.getDefault())
-                    val addresses: List<Address>? = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-                    if (!addresses.isNullOrEmpty()) {
-                        val bairro = addresses[0].subLocality ?: addresses[0].thoroughfare ?: "Local atual"
-                        val cidade = addresses[0].adminArea ?: ""
-                        localizacaoAtual = "$bairro,$cidade"
-                    } else {
-                        localizacaoAtual = "São Paulo, SP"
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        try {
+                            val geocoder = Geocoder(this@MainActivity, Locale.getDefault())
+                            val addresses: List<Address>? = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                            val textoLocal = if (!addresses.isNullOrEmpty()) {
+                                val bairro = addresses[0].subLocality ?: addresses[0].thoroughfare ?: "Local atual"
+                                val cidade = addresses[0].adminArea ?: ""
+                                "$bairro, $cidade"
+                            } else {
+                                "São Paulo, SP"
+                            }
+                            withContext(Dispatchers.Main) {
+                                localizacaoAtual = textoLocal
+                            }
+                        } catch (_: Exception) {
+                            withContext(Dispatchers.Main) {
+                                localizacaoAtual = "São Paulo, SP"
+                            }
+                        }
                     }
                 } else {
                     localizacaoAtual = "São Paulo, SP"

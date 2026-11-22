@@ -199,16 +199,20 @@ fun TelaExplorar(
                         }
                     }
 
-                    Text("Distância Máxima", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("1.0", "2.0", "5.0").forEach { dist ->
-                            FilterChip(
-                                selected = filtroDistancia == dist,
-                                onClick = { viewModel.updateFiltroDistancia(if (filtroDistancia == dist) "" else dist) },
-                                label = { Text("Até $dist km") }
-                            )
-                        }
-                    }
+                    val distFloat = filtroDistancia.toFloatOrNull() ?: 200f
+                    Text("Distância Máxima: ${distFloat.toInt()} km", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Slider(
+                        value = distFloat.coerceIn(2f, 200f),
+                        onValueChange = { novoVal ->
+                            viewModel.updateFiltroDistancia(novoVal.toInt().toString())
+                        },
+                        valueRange = 2f..200f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFF8E4772),
+                            activeTrackColor = Color(0xFF8E4772),
+                            inactiveTrackColor = Color(0xFFE0E0E0)
+                        )
+                    )
                 }
             },
             confirmButton = {

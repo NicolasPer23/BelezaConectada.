@@ -7,8 +7,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.belezaconectada.data.repository.AuthRepository
 import com.example.belezaconectada.data.repository.BrasilApiRepository
-import com.google.firebase.auth.AuthCredential
 import kotlinx.coroutines.launch
+import java.io.IOException
+import java.net.UnknownHostException
 
 class AuthViewModel(
     private val authRepository: AuthRepository = AuthRepository(),
@@ -17,9 +18,15 @@ class AuthViewModel(
 
     var email by mutableStateOf("")
     var senha by mutableStateOf("")
+    var confirmarSenha by mutableStateOf("")
     var nome by mutableStateOf("")
+    var sobrenome by mutableStateOf("")
+    var telefone by mutableStateOf("")
+    var dataNascimento by mutableStateOf("")
+    var genero by mutableStateOf("")
     var cnpj by mutableStateOf("")
     var cep by mutableStateOf("")
+    var aceitouTermos by mutableStateOf(false)
     var isCadastro by mutableStateOf(false)
     var mensagemErro by mutableStateOf("")
     var carregando by mutableStateOf(false)
@@ -30,6 +37,24 @@ class AuthViewModel(
 
     fun resetMensagemErro() {
         mensagemErro = ""
+    }
+
+    fun redefinirSenha(onSucesso: () -> Unit) {
+        val emailValido = android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
+        if (!emailValido) {
+            mensagemErro = "Insira um e-mail válido no campo de e-mail para redefinir sua senha."
+            return
+        }
+        carregando = true
+        mensagemErro = ""
+        authRepository.redefinirSenha(email) { sucesso, erro ->
+            carregando = false
+            if (sucesso) {
+                onSucesso()
+            } else {
+                mensagemErro = erro ?: "Erro ao enviar e-mail de redefinição."
+            }
+        }
     }
 
     fun consultarCnpjSeValido(onSucesso: (nome: String) -> Unit) {
@@ -53,6 +78,12 @@ class AuthViewModel(
                     if (situacao.isNotEmpty() && !situacao.equals("ATIVA", ignoreCase = true)) {
                         mensagemErro = "Atenção: Situação do CNPJ na Receita Federal é $situacao."
                     }
+                } catch (_: UnknownHostException) {
+                    buscandoCnpj = false
+                    mensagemErro = "Sem conexão com o servidor da Receita Federal. Verifique sua internet."
+                } catch (_: IOException) {
+                    buscandoCnpj = false
+                    mensagemErro = "Erro de conexão de rede ao buscar CNPJ."
                 } catch (_: Exception) {
                     buscandoCnpj = false
                     mensagemErro = "CNPJ não encontrado na Receita Federal."
@@ -75,6 +106,12 @@ class AuthViewModel(
                     val cidade = respCep.city ?: ""
                     val estado = respCep.state ?: ""
                     onSucesso("Endereço: $rua, $bairro - $cidade/$estado")
+                } catch (_: UnknownHostException) {
+                    buscandoCep = false
+                    mensagemErro = "Sem conexão de rede ao consultar CEP."
+                } catch (_: IOException) {
+                    buscandoCep = false
+                    mensagemErro = "Erro de rede. Verifique sua conexão de internet."
                 } catch (_: Exception) {
                     buscandoCep = false
                     mensagemErro = "CEP não encontrado ou erro de conexão."
@@ -104,12 +141,36 @@ class AuthViewModel(
                 mensagemErro = "Por favor, preencha o seu nome."
                 return
             }
+            if (sobrenome.isBlank()) {
+                mensagemErro = "Por favor, preencha o seu sobrenome."
+                return
+            }
+            if (telefone.isBlank()) {
+                mensagemErro = "Por favor, informe seu número de telefone."
+                return
+            }
+            if (dataNascimento.isBlank()) {
+                mensagemErro = "Por favor, informe sua data de nascimento."
+                return
+            }
+            if (genero.isBlank()) {
+                mensagemErro = "Por favor, selecione seu sexo (Feminino ou Masculino)."
+                return
+            }
             if (isEstabelecimento && cnpj.length < 14) {
                 mensagemErro = "Por favor, insira um CNPJ válido."
                 return
             }
+            if (senha != confirmarSenha) {
+                mensagemErro = "As senhas não coincidem. Digite novamente."
+                return
+            }
             if (!temOitoDigitos || !temMaiuscula || !temMinuscula || !temEspecial) {
-                mensagemErro = "Senha fraca. Siga os requisitos solicitados."
+                mensagemErro = "Senha fraca. A senha deve ter 8+ caracteres, com maiúscula, minúscula e caractere especial."
+                return
+            }
+            if (!aceitouTermos) {
+                mensagemErro = "Por favor, aceite os termos de autorização para continuar."
                 return
             }
         }
@@ -122,8 +183,13 @@ class AuthViewModel(
                 email = email,
                 senha = senha,
                 nome = nome,
+                sobrenome = sobrenome,
+                telefone = telefone,
+                dataNascimento = dataNascimento,
+                genero = genero,
                 isEstabelecimento = isEstabelecimento,
-                cnpj = cnpj
+                cnpj = cnpj,
+                aceitouTermos = aceitouTermos
             ) { sucesso, erro ->
                 carregando = false
                 if (sucesso) {
@@ -140,21 +206,6 @@ class AuthViewModel(
                 } else {
                     mensagemErro = erro ?: "Credenciais inválidas."
                 }
-            }
-        }
-    }
-
-    fun autenticarComGoogle(
-        credential: AuthCredential,
-        onLoginSucesso: () -> Unit
-    ) {
-        carregando = true
-        authRepository.autenticarComGoogle(credential) { sucesso, erro ->
-            carregando = false
-            if (sucesso) {
-                onLoginSucesso()
-            } else {
-                mensagemErro = erro ?: "Falha ao autenticar com Google."
             }
         }
     }

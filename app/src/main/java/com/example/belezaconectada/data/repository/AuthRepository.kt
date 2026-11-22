@@ -1,6 +1,5 @@
 package com.example.belezaconectada.data.repository
 
-import com.google.firebase.auth.AuthCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
@@ -40,12 +39,31 @@ class AuthRepository(
             }
     }
 
+    fun redefinirSenha(
+        email: String,
+        onResult: (sucesso: Boolean, mensagemErro: String?) -> Unit
+    ) {
+        auth.sendPasswordResetEmail(email)
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    onResult(true, null)
+                } else {
+                    onResult(false, task.exception?.localizedMessage ?: "Erro ao enviar e-mail de redefinição de senha.")
+                }
+            }
+    }
+
     fun cadastrarUsuario(
         email: String,
         senha: String,
         nome: String,
+        sobrenome: String = "",
+        telefone: String = "",
+        dataNascimento: String = "",
+        genero: String = "",
         isEstabelecimento: Boolean,
         cnpj: String,
+        aceitouTermos: Boolean = true,
         onResult: (sucesso: Boolean, mensagemErro: String?) -> Unit
     ) {
         auth.createUserWithEmailAndPassword(email, senha)
@@ -55,9 +73,15 @@ class AuthRepository(
                     val dadosUsuario = hashMapOf(
                         "uid" to userId,
                         "nome" to nome,
+                        "sobrenome" to sobrenome,
+                        "nomeCompleto" to "$nome $sobrenome".trim(),
+                        "telefone" to telefone,
+                        "dataNascimento" to dataNascimento,
+                        "genero" to genero,
                         "email" to email,
                         "tipoPerfil" to if (isEstabelecimento) "estabelecimento" else "cliente",
                         "cnpj" to if (isEstabelecimento) cnpj else "",
+                        "aceitouTermos" to aceitouTermos,
                         "statusAprovacao" to if (isEstabelecimento) "PENDENTE" else "APROVADO",
                         "criadoEm" to System.currentTimeMillis()
                     )
@@ -73,20 +97,6 @@ class AuthRepository(
                         }
                 } else {
                     onResult(false, task.exception?.localizedMessage ?: "Erro ao criar conta.")
-                }
-            }
-    }
-
-    fun autenticarComGoogle(
-        credential: AuthCredential,
-        onResult: (sucesso: Boolean, mensagemErro: String?) -> Unit
-    ) {
-        auth.signInWithCredential(credential)
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    onResult(true, null)
-                } else {
-                    onResult(false, task.exception?.localizedMessage ?: "Falha ao autenticar com Google.")
                 }
             }
     }
